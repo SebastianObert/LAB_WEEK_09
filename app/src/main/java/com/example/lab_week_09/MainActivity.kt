@@ -33,6 +33,10 @@ import com.example.lab_week_09.ui.theme.LAB_WEEK_09Theme
 import com.example.lab_week_09.ui.theme.OnBackgroundItemText
 import com.example.lab_week_09.ui.theme.OnBackgroundTitleText
 import com.example.lab_week_09.ui.theme.PrimaryTextButton
+import com.squareup.moshi.JsonClass
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.Types
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,6 +55,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@JsonClass(generateAdapter = true)
 data class Student(
     var name: String
 )
@@ -59,8 +64,8 @@ data class Student(
 fun App(navController: NavHostController) {
     NavHost(navController = navController, startDestination = "home") {
         composable("home") {
-            Home { listDataString ->
-                navController.navigate("resultContent/?listData=$listDataString")
+            Home { listDataJson ->
+                navController.navigate("resultContent/?listData=$listDataJson")
             }
         }
         composable(
@@ -70,7 +75,7 @@ fun App(navController: NavHostController) {
                 nullable = true
             })
         ) { backStackEntry ->
-            ResultContent(listData = backStackEntry.arguments?.getString("listData").orEmpty())
+            ResultContent(listDataJson = backStackEntry.arguments?.getString("listData").orEmpty())
         }
     }
 }
@@ -96,7 +101,13 @@ fun Home(navigateFromHomeToResult: (String) -> Unit) {
                 inputField.value = Student("")
             }
         },
-        navigateFromHomeToResult = { navigateFromHomeToResult(listData.toList().toString()) }
+        navigateFromHomeToResult = {
+            val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+            val listType = Types.newParameterizedType(List::class.java, Student::class.java)
+            val adapter = moshi.adapter<List<Student>>(listType)
+            val listDataJson = adapter.toJson(listData.toList())
+            navigateFromHomeToResult(listDataJson)
+        }
     )
 }
 
@@ -150,13 +161,21 @@ fun HomeContent(
 }
 
 @Composable
-fun ResultContent(listData: String) {
-    Column(
+fun ResultContent(listDataJson: String) {
+    val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+    val listType = Types.newParameterizedType(List::class.java, Student::class.java)
+    val adapter = moshi.adapter<List<Student>>(listType)
+
+    val studentList = if(listDataJson.isNotEmpty()) adapter.fromJson(listDataJson) else emptyList()
+
+    LazyColumn(
         modifier = Modifier
-            .padding(vertical = 4.dp)
-            .fillMaxSize(),
+            .fillMaxSize()
+            .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        OnBackgroundItemText(text = listData)
+        items(studentList ?: emptyList()) { student ->
+            OnBackgroundItemText(text = student.name)
+        }
     }
 }
